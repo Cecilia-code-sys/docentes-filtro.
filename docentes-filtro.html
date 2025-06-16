@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Filtro de Docentes desde Excel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+  <style>
+    /* Reset & base */
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+      color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      height: 64px;
+      background: rgba(255 255 255 / 0.1);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      font-weight: 700;
+      font-size: clamp(1.25rem, 2vw, 1.5rem);
+      color: white;
+      flex-shrink: 0;
+    }
+    main {
+      flex-grow: 1;
+      padding: 24px;
+      max-width: 1200px;
+      margin: auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .upload-section {
+      background: rgba(255 255 255 / 0.1);
+      padding: 16px;
+      border-radius: 16px;
+      margin-bottom: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+    label[for="input-excel"] {
+      cursor: pointer;
+      background: #4338ca;
+      padding: 12px 24px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      user-select: none;
+      transition: background-color 0.3s ease;
+    }
+    label[for="input-excel"]:hover {
+      background: #5b4ad4;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    select {
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: none;
+      font-size: 1rem;
+      background: #6366f1;
+      color: white;
+      min-width: 220px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.3s ease;
+    }
+    select:hover, select:focus {
+      background: #5b4ad4;
+      outline: none;
+    }
+    .table-container {
+      overflow-x: auto;
+      background: rgba(255 255 255 / 0.1);
+      border-radius: 20px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+      flex-grow: 1;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 600px;
+    }
+    thead {
+      background: rgba(255 255 255 / 0.12);
+      font-weight: 700;
+      font-size: 1rem;
+      text-align: left;
+    }
+    th, td {
+      padding: 14px 20px;
+      border-bottom: 1px solid rgba(255 255 255 / 0.15);
+      color: white;
+    }
+    tbody tr:hover {
+      background: rgba(255 255 255 / 0.15);
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .material-icons {
+      vertical-align: middle;
+      font-size: 24px;
+    }
+    .no-data {
+      padding: 24px;
+      text-align: center;
+      font-style: italic;
+      color: #ddd;
+    }
+    @media (max-width: 640px) {
+      main {
+        padding: 12px;
+      }
+      label[for="input-excel"] {
+        flex: 1 1 100%;
+        justify-content: center;
+      }
+      select {
+        flex: 1 1 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="material-icons">school</span>&nbsp; Filtro Docentes desde Excel
+  </header>
+  <main>
+    <section class="upload-section" aria-label="Carga y filtro de docentes">
+      <label for="input-excel">
+        <span class="material-icons">upload_file</span>
+        Cargar Listado Excel
+      </label>
+      <input type="file" id="input-excel" accept=".xlsx,.xls" aria-label="Seleccionar archivo Excel con listado de docentes" />
+      <select id="filter-specialty" aria-label="Filtrar por especialidad">
+        <option value="">Filtrar por especialidad</option>
+      </select>
+    </section>
+    <section class="table-container" aria-live="polite" aria-relevant="all">
+      <table role="table" id="docentes-table" aria-label="Listado de docentes filtrados">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Especialidad</th>
+            <th>Correo</th>
+            <th>Teléfono</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="4" class="no-data">Por favor, carga un archivo Excel para ver los docentes.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/xlsx.full.min.js"></script>
+  <script>
+    (() => {
+      const inputExcel = document.getElementById('input-excel');
+      const filterSpecialty = document.getElementById('filter-specialty');
+      const tableBody = document.querySelector('#docentes-table tbody');
+
+      let docentesData = [];
+
+      // Función para limpiar la tabla
+      function clearTable() {
+        tableBody.innerHTML = '';
+      }
+
+      // Función para renderizar la tabla con los datos filtrados
+      function renderTable(data) {
+        clearTable();
+
+        if (data.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="4" class="no-data">No se encontraron docentes con la especialidad seleccionada.</td></tr>';
+          return;
+        }
+
+        const rowsHtml = data.map(docente => `
+          <tr tabindex="0">
+            <td>${docente.Nombre || ''}</td>
+            <td>${docente.Especialidad || ''}</td>
+            <td>${docente.Correo || ''}</td>
+            <td>${docente.Teléfono || ''}</td>
+          </tr>
+        `).join('');
+        tableBody.innerHTML = rowsHtml;
+      }
+
+      // Función para actualizar las opciones del filtro según especialidades únicas
+      function populateFilterOptions() {
+        const specialties = new Set(docentesData.map(d => d.Especialidad).filter(Boolean));
+        filterSpecialty.innerHTML = '<option value="">Filtrar por especialidad</option>';
+        for (const s of Array.from(specialties).sort()) {
+          const option = document.createElement('option');
+          option.value = s;
+          option.textContent = s;
+          filterSpecialty.appendChild(option);
+        }
+      }
+
+      // Manejador de cambio en filtro
+      filterSpecialty.addEventListener('change', () => {
+        const val = filterSpecialty.value;
+        if (!val) {
+          renderTable(docentesData);
+        } else {
+          const filtered = docentesData.filter(d => d.Especialidad === val);
+          renderTable(filtered);
+        }
+      });
+
+      // Función para leer Excel y extraer datos
+      function handleFile(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+
+          // Supongamos que el listado está en la primera hoja
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+
+          // Convertir a JSON un array de objetos
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+          if (jsonData.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4" class="no-data">El archivo no contiene datos.</td></tr>';
+            docentesData = [];
+            populateFilterOptions();
+            return;
+          }
+
+          // Intentamos normalizar campos claves (Nombre, Especialidad, Correo, Teléfono)
+          docentesData = jsonData.map(row => ({
+            Nombre: row['Nombre'] || row['name'] || row['Nombre completo'] || '',
+            Especialidad: row['Especialidad'] || row['especialidad'] || row['Área'] || row['Área de especialidad'] || '',
+            Correo: row['Correo'] || row['Email'] || row['email'] || '',
+            Teléfono: row['Teléfono'] || row['Telefono'] || row['teléfono'] || '',
+          })).filter(d => d.Nombre);
+
+          populateFilterOptions();
+          renderTable(docentesData);
+        };
+        reader.readAsArrayBuffer(file);
+      }
+
+      inputExcel.addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!file.name.match(/\.(xlsx|xls)$/i)) {
+          alert('Por favor, seleccione un archivo Excel válido (.xlsx o .xls).');
+          inputExcel.value = '';
+          return;
+        }
+        handleFile(file);
+      });
+    })();
+  </script>
+</body>
+</html>
+
